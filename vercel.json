@@ -2,10 +2,5 @@
   "functions": {
     "api/chat.py": {"runtime": "python3.12"},
     "api/index.py": {"runtime": "python3.12"}
-  },
-  "routes": [
-    {"src": "/api/chat", "dest": "/api/chat.py"},
-    {"src": "/api/index", "dest": "/api/index.py"},
-    {"src": "/(.*)", "dest": "/index.html"}
-  ]
+  }
 }
