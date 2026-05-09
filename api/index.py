@@ -9,8 +9,8 @@ from telegram.ext import (
     filters,
 )
 
-TOKEN = os.getenv("8226788618:AAEAoAvt7l9mwI8arZJ2R-Yq49eIjDB_lUc")
-GROQ_KEY = os.getenv("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")
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+GROQ_KEY = os.getenv("GROQ_KEY")
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
