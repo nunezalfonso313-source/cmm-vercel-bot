@@ -113,7 +113,7 @@ h1{font-family:"Share Tech Mono",monospace;font-size:1.1rem;letter-spacing:2px;}
   </div>
 </div>
 <script>
-let map, markers = [], refreshTimer, hantaCountries = [], issMarker = null;
+let map, markers = [], refreshTimer, hantaCountries = [], issMarker = null, timelineVisible = false, timelineChart = null, AUTH_TOKEN = localStorage.getItem('hanta_token')||'';
 
 function initMap() {
   map = L.map('map', {zoomControl:true}).setView([20,-30],2);
@@ -189,48 +189,90 @@ async function loadHanta() {
 
 // ── HANTA ──────────────────────────────────────────────
 async function loadHanta() {
-  try {
-    clearMarkers();
-    setSidebarTitle('🦠 Hantavirus');
-    setList('<div class="loading">⏳ Cargando datos...</div>');
-    const token=localStorage.getItem('hanta_token')||'';
-    const res=await fetch('/api/hanta',{headers:{'X-Auth-Token':token}});
-    const {cases,total}=await res.json();
-    const totalCasos=cases.reduce((s,c)=>s+(c.cases_total||0),0);
-    const totalMuertes=cases.reduce((s,c)=>s+(c.deaths||0),0);
-    const paises=[...new Set(cases.map(c=>c.country))].length;
-    setStat(`
-      <div class="stat"><div class="stat-val" style="color:var(--accent)">${total}</div><div class="stat-label">Registros</div></div>
-      <div class="stat"><div class="stat-val" style="color:var(--accent2)">${totalCasos.toLocaleString()}</div><div class="stat-label">Casos</div></div>
-      <div class="stat"><div class="stat-val" style="color:#c77dff">${totalMuertes.toLocaleString()}</div><div class="stat-label">Muertes</div></div>
-      <div class="stat"><div class="stat-val" style="color:var(--green)">${paises}</div><div class="stat-label">Países</div></div>
-    `);
-    setToolbar(`<button class="tb-btn" onclick="loadHanta()">🔄 Actualizar</button><span style="color:var(--muted);font-size:.75rem">D1 Database · ${total} registros</span>`);
-    setLegend(`
-      <div class="legend-item"><div class="legend-dot" style="background:#e63946"></div>100+ casos</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#f4a261"></div>10-99 casos</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#52b788"></div>1-9 casos</div>
-    `);
-    cases.forEach(c=>{
-      if(!c.lat||!c.lon)return;
-      const color=c.cases_total>=100?'#e63946':c.cases_total>=10?'#f4a261':'#52b788';
-      const r=Math.max(5,Math.min(20,Math.log(c.cases_total+1)*3));
-      const circle=L.circleMarker([c.lat,c.lon],{radius:r,fillColor:color,color:'#000',weight:.5,fillOpacity:.75}).addTo(map);
-      circle.bindPopup(`<b>${c.country}</b><br>📍 ${c.region}<br>🦠 Casos: <b>${c.cases_total}</b><br>💀 Muertes: <b>${c.deaths||0}</b><br>📅 ${c.reported_date}<br>${c.notes?'📝 '+c.notes:''}`);
-      markers.push(circle);
-    });
-    const html=cases.map(c=>`
-      <div class="item-row" onclick="${c.lat&&c.lon?'flyTo('+c.lat+','+c.lon+')':''}">
-        <div class="title">${c.country} <span style="color:var(--muted);font-weight:400">— ${c.region||''}</span></div>
-        <div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap">
-          <span class="badge badge-red">🦠 ${c.cases_total} casos</span>
-          ${c.deaths?'<span class="badge badge-purple">💀 '+c.deaths+' muertes</span>':''}
-          <span class="badge" style="color:var(--muted);background:var(--bg2)">${c.reported_date||''}</span>
-        </div>
-        ${c.notes?'<div class="sub" style="margin-top:3px">'+c.notes+'</div>':''}
-      </div>`).join('');
-    setList(html||'<div class="loading">Sin datos en la base</div>');
-  } catch(e){setList(`<div class="loading">Error: ${e.message}</div>`);}
+  const country = document.getElementById('hanta-country')?.value || '';
+  const from = document.getElementById('hanta-from')?.value || '';
+  const to = document.getElementById('hanta-to')?.value || '';
+  const params = new URLSearchParams();
+  if (country) params.set('country', country);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+
+  const [casesRes, statsRes] = await Promise.all([
+    fetch('/api/hanta/cases?' + params),
+    fetch('/api/hanta/stats')
+  ]);
+  const { cases, last_updated } = await casesRes.json();
+  const stats = await statsRes.json();
+
+  setStat(`
+    <div class="stat"><div class="stat-val" style="color:var(--accent)">${stats.total_cases||0}</div><div class="stat-label">Casos</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--accent2)">${stats.total_deaths||0}</div><div class="stat-label">Fallecidos</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--green)">${stats.countries||0}</div><div class="stat-label">Países</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--muted);font-size:1rem">${new Date(last_updated).toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'})}</div><div class="stat-label">Actualizado</div></div>
+  `);
+
+  if (!hantaCountries.length) {
+    const cr = await fetch('/api/hanta/countries');
+    hantaCountries = await cr.json();
+  }
+  const countryOptions = hantaCountries.map(c => `<option value="${c}" ${c===country?'selected':''}>${c}</option>`).join('');
+
+  setToolbar(`
+    <select id="hanta-country" onchange="loadHanta()"><option value="">Todos los países</option>${countryOptions}</select>
+    <input type="date" id="hanta-from" value="${from}" onchange="loadHanta()" title="Desde"/>
+    <input type="date" id="hanta-to" value="${to}" onchange="loadHanta()" title="Hasta"/>
+    <button class="tb-btn" onclick="clearHantaFilters()">Limpiar</button>
+    <button class="tb-btn" id="btn-timeline" onclick="toggleTimeline()">📈 Timeline</button>
+    <button class="tb-btn" onclick="window.location='/api/hanta/export.csv'">⬇ CSV</button>
+    <button class="tb-btn" id="btn-sync" onclick="syncHanta()">🔄 Sync</button>
+  `);
+
+  setLegend(`
+    <div class="legend-item"><div class="legend-dot" style="background:#e63946"></div>Con fallecidos</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f4a261"></div>Sin fallecidos</div>
+  `);
+  setSidebarTitle(`HANTAVIRUS — ${cases.length} registros`);
+
+  clearMarkers();
+  let html = '';
+  cases.forEach(c => {
+    if (c.lat === 0 && c.lon === 0) return;
+    const circle = L.circleMarker([c.lat, c.lon], {
+      radius: Math.max(6, Math.sqrt(c.cases_total)*4),
+      fillColor: c.deaths > 0 ? '#e63946' : '#f4a261',
+      color:'#fff', weight:1, opacity:.7, fillOpacity:.6
+    }).addTo(map);
+    circle.bindPopup(`<b>${c.country}</b><br>Casos: ${c.cases_total}<br>Fallecidos: ${c.deaths}<br>${c.reported_date}`);
+    markers.push(circle);
+    html += `<div class="item-row" onclick="flyTo(${c.lat},${c.lon})">
+      <div class="title">${c.country}</div>
+      <div class="sub">${c.reported_date} &nbsp;<span class="badge badge-red">${c.cases_total}c</span>${c.deaths>0?` <span class="badge badge-orange">${c.deaths}†</span>`:''}</div>
+    </div>`;
+  });
+  setList(html || '<div class="loading">Sin resultados</div>');
+  refreshTimer = setInterval(() => loadHanta(), 60000);
+}
+
+function clearHantaFilters() {
+  const c = document.getElementById('hanta-country');
+  const f = document.getElementById('hanta-from');
+  const t = document.getElementById('hanta-to');
+  if(c) c.value = '';
+  if(f) f.value = '';
+  if(t) t.value = '';
+  loadHanta();
+}
+
+async function syncHanta() {
+  if (!AUTH_TOKEN) { alert('Token requerido'); return; }
+  const btn = document.getElementById('btn-sync');
+  if (btn) { btn.textContent = '⏳...'; btn.disabled = true; }
+  const res = await fetch('/api/hanta/sync', { method:'POST', headers:{'X-Auth-Token': AUTH_TOKEN} });
+  const d = await res.json();
+  if (btn) { btn.textContent = '🔄 Sync'; btn.disabled = false; }
+  alert(d.error || `Insertados: ${d.inserted} de ${d.total}`);
+  hantaCountries = [];
+  loadHanta();
 }
 
 // ── SISMOS ─────────────────────────────────────────────
