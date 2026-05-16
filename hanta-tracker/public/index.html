@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>GlobalWatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#0a0e0f;--bg2:#111618;--panel:#0d1214;--border:#1e2a2d;--text:#e0e8ea;--text2:#8fa8ad;--muted:#4a6268;--accent:#e63946;--accent2:#f4a261;--green:#52b788;--blue:#4895ef;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:Inter,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+h1{font-family:"Share Tech Mono",monospace;font-size:1.1rem;letter-spacing:2px;}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:6px;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.nav{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.nav-btn{background:transparent;border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:3px;cursor:pointer;font-size:.75rem;font-family:inherit;}
+.nav-btn.active,.nav-btn:hover{background:var(--bg2);color:var(--text);}
+.nav-btn[data-module=hanta].active{background:rgba(230,57,70,.2);color:var(--accent);border-color:var(--accent);}
+.nav-btn[data-module=sismos].active{background:rgba(244,162,97,.2);color:var(--accent2);border-color:var(--accent2);}
+.nav-btn[data-module=vuelos].active{background:rgba(72,149,239,.2);color:var(--blue);border-color:var(--blue);}
+.nav-btn[data-module=incendios].active{background:rgba(244,162,97,.2);color:var(--accent2);border-color:var(--accent2);}
+.nav-btn[data-module=iss].active{background:rgba(82,183,136,.2);color:var(--green);border-color:var(--green);}
+.nav-btn[data-module=asteroides].active{background:rgba(123,45,139,.2);color:#c77dff;border-color:#c77dff;}
+.nav-btn[data-module=clima].active{background:rgba(72,149,239,.2);color:var(--blue);border-color:var(--blue);}
+.header-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.token-form{display:flex;gap:4px;}
+.token-form input{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:4px 8px;font-size:.75rem;border-radius:3px;width:90px;}
+.token-form button{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:4px 8px;font-size:.75rem;border-radius:3px;cursor:pointer;}
+.auth-badge{font-family:"Share Tech Mono",monospace;font-size:.7rem;padding:2px 6px;border-radius:2px;}
+.auth-badge.ok{color:var(--green);border:1px solid var(--green);}
+.auth-badge.fail{color:var(--accent);border:1px solid var(--accent);}
+.stats-bar{display:flex;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;}
+.stat{padding:8px 16px;border-right:1px solid var(--border);min-width:80px;}
+.stat-val{font-family:"Share Tech Mono",monospace;font-size:1.4rem;font-weight:700;}
+.stat-label{font-size:.6rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-top:2px;}
+.toolbar{display:flex;gap:6px;padding:7px 12px;border-bottom:1px solid var(--border);background:var(--panel);flex-wrap:wrap;align-items:center;flex-shrink:0;}
+.tb-btn{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:3px;cursor:pointer;font-size:.75rem;font-family:inherit;}
+.tb-btn:hover{border-color:var(--text2);}
+.toolbar select,.toolbar input[type=range]{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 7px;font-family:inherit;font-size:.8rem;outline:none;}
+.main{display:grid;grid-template-columns:1fr 320px;flex:1;overflow:hidden;position:relative;}
+#map{width:100%;height:100%;}
+.sidebar{border-left:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column;}
+.sidebar-title{font-size:.65rem;text-transform:uppercase;letter-spacing:3px;color:var(--muted);padding:8px 12px;background:var(--panel);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border);}
+.item-row{padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;}
+.item-row:hover{background:var(--bg2);}
+.item-row .title{font-size:.82rem;font-weight:600;}
+.item-row .sub{font-size:.72rem;color:var(--text2);margin-top:2px;}
+.badge{font-family:"Share Tech Mono",monospace;font-size:.75rem;padding:1px 6px;border-radius:2px;display:inline-block;}
+.badge-red{color:var(--accent);background:rgba(230,57,70,.1);}
+.badge-orange{color:var(--accent2);background:rgba(244,162,97,.1);}
+.badge-green{color:var(--green);background:rgba(82,183,136,.1);}
+.badge-blue{color:var(--blue);background:rgba(72,149,239,.1);}
+.badge-purple{color:#c77dff;background:rgba(123,45,139,.1);}
+.loading{padding:20px;text-align:center;color:var(--muted);font-size:.85rem;}
+.legend{position:absolute;bottom:24px;left:8px;z-index:999;background:rgba(10,14,15,.9);border:1px solid var(--border);padding:7px 10px;font-size:.68rem;color:var(--muted);}
+.legend-item{display:flex;align-items:center;gap:5px;margin-bottom:3px;}
+.legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.chart-overlay{display:none;position:absolute;top:10px;right:330px;z-index:999;background:var(--panel);border:1px solid var(--border);padding:16px;width:340px;}
+.chart-wrap{width:300px;height:180px;}
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);}
+@media(max-width:600px){
+  .main{grid-template-columns:1fr;grid-template-rows:45vh 1fr;}
+  .sidebar{border-left:none;border-top:1px solid var(--border);}
+  .chart-overlay{right:0;}
+  body.mod-clima .main{grid-template-rows:20vh 1fr;}
+  body.mod-clima #map{opacity:0.5;}
+  body.mod-asteroides .main{grid-template-rows:20vh 1fr;}
+  body.mod-asteroides #map{opacity:0.3;}
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1><span class="status-dot"></span>GLOBAL<span style="color:var(--accent)">WATCH</span></h1>
+    <nav class="nav">
+      <button class="nav-btn active" data-module="hanta" onclick="setModule('hanta')">🦠 Hantavirus</button>
+      <button class="nav-btn" data-module="sismos" onclick="setModule('sismos')">🌍 Sismos</button>
+      <button class="nav-btn" data-module="vuelos" onclick="setModule('vuelos')">✈️ Vuelos</button>
+      <button class="nav-btn" data-module="incendios" onclick="setModule('incendios')">🔥 Incendios</button>
+      <button class="nav-btn" data-module="iss" onclick="setModule('iss')">🛸 ISS</button>
+      <button class="nav-btn" data-module="asteroides" onclick="setModule('asteroides')">☄️ Asteroides</button>
+      <button class="nav-btn" data-module="clima" onclick="setModule('clima')">🌤️ Clima</button>
+    </nav>
+  </div>
+  <div class="header-right">
+    <div class="token-form">
+      <input type="password" id="auth-input" placeholder="token"/>
+      <button onclick="setToken()">OK</button>
+    </div>
+    <span class="auth-badge fail" id="auth-status">BLOQ</span>
+  </div>
+</header>
+<div class="stats-bar" id="stats-bar"></div>
+<div class="toolbar" id="toolbar"></div>
+<div class="main" style="position:relative;">
+  <div id="map"></div>
+  <div class="legend" id="legend"></div>
+  <div class="chart-overlay" id="chart-overlay">
+    <h3>Evolución temporal</h3>
+    <div class="chart-wrap"><canvas id="timeline-chart"></canvas></div>
+    <button class="tb-btn" style="margin-top:12px;width:100px" onclick="toggleTimeline()">← Cerrar</button>
+  </div>
+  <div class="sidebar">
+    <div class="sidebar-title" id="sidebar-title">Cargando...</div>
+    <div id="item-list"><div class="loading">Cargando datos...</div></div>
+  </div>
+</div>
+<script>
+let map, markers = [], refreshTimer, hantaCountries = [], issMarker = null;
+
+function initMap() {
+  map = L.map('map', {zoomControl:true}).setView([20,-30],2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution:'©OpenStreetMap ©CARTO', maxZoom:19
+  }).addTo(map);
+}
+
+function clearMarkers() {
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+  if(issMarker){map.removeLayer(issMarker);issMarker=null;}
+}
+
+function setStat(html){document.getElementById('stats-bar').innerHTML=html;}
+function setToolbar(html){document.getElementById('toolbar').innerHTML=html;}
+function setLegend(html){document.getElementById('legend').innerHTML=html;}
+function setSidebarTitle(t){document.getElementById('sidebar-title').textContent=t;}
+function setList(html){document.getElementById('item-list').innerHTML=html;}
+function flyTo(lat,lon){map.flyTo([lat,lon],5,{duration:1});}
+
+function setModule(mod) {
+  document.body.className=document.body.className.replace(/mod-\S+/g,'').trim();
+  document.body.classList.add('mod-'+mod);
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.module===mod));
+  if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}
+  setList('<div class="loading">Cargando...</div>');
+  setLegend('');
+  if(mod==='hanta') loadHanta();
+  else if(mod==='sismos') loadSismos();
+  else if(mod==='vuelos') loadVuelos();
+  else if(mod==='incendios') loadIncendios();
+  else if(mod==='iss') loadISS();
+  else if(mod==='asteroides') loadAsteroides();
+  else if(mod==='clima') loadClima();
+}
+
+function setToken() {
+  const t=document.getElementById('auth-input').value.trim();
+  if(t){localStorage.setItem('hanta_token',t);document.getElementById('auth-status').textContent='AUTH';document.getElementById('auth-status').className='auth-badge ok';}
+}
+
+function toggleTimeline(){
+  const o=document.getElementById('chart-overlay');
+  o.style.display=o.style.display==='block'?'none':'block';
+}
+
+// ── HANTA ──────────────────────────────────────────────
+async function loadHanta() {
+  try {
+    clearMarkers();
+    setSidebarTitle('🦠 Hantavirus');
+    const token=localStorage.getItem('hanta_token')||'';
+    const res=await fetch('/api/hanta',{headers:{'X-Auth-Token':token}});
+    const {cases,total}=await res.json();
+    const byCountry={};
+    cases.forEach(c=>{byCountry[c.country]=(byCountry[c.country]||0)+(c.cases||1);});
+    const totalCases=Object.values(byCountry).reduce((a,b)=>a+b,0);
+    setStat(`
+      <div class="stat"><div class="stat-val" style="color:var(--accent)">${total}</div><div class="stat-label">Registros</div></div>
+      <div class="stat"><div class="stat-val">${Object.keys(byCountry).length}</div><div class="stat-label">Países</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--accent2)">${totalCases}</div><div class="stat-label">Total casos</div></div>
+    `);
+    setToolbar(`<button class="tb-btn" onclick="loadHanta()">🔄 Actualizar</button>`);
+    const html=cases.slice(0,50).map(c=>`
+      <div class="item-row">
+        <div class="title">${c.country} — ${c.region||''}  <span class="badge badge-red">${c.cases||1} casos</span></div>
+        <div class="sub">${c.reported_date||''}</div>
+      </div>`).join('');
+    setList(html||'<div class="loading">Sin datos</div>');
+  } catch(e){setList(`<div class="loading">Error: ${e.message}</div>`);}
+}
+
+// ── HANTA ──────────────────────────────────────────────
+async function loadHanta() {
+  try {
+    clearMarkers();
+    setSidebarTitle('🦠 Hantavirus');
+    setList('<div class="loading">⏳ Cargando datos...</div>');
+    const token=localStorage.getItem('hanta_token')||'';
+    const res=await fetch('/api/hanta',{headers:{'X-Auth-Token':token}});
+    const {cases,total}=await res.json();
+    const totalCasos=cases.reduce((s,c)=>s+(c.cases_total||0),0);
+    const totalMuertes=cases.reduce((s,c)=>s+(c.deaths||0),0);
+    const paises=[...new Set(cases.map(c=>c.country))].length;
+    setStat(`
+      <div class="stat"><div class="stat-val" style="color:var(--accent)">${total}</div><div class="stat-label">Registros</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--accent2)">${totalCasos.toLocaleString()}</div><div class="stat-label">Casos</div></div>
+      <div class="stat"><div class="stat-val" style="color:#c77dff">${totalMuertes.toLocaleString()}</div><div class="stat-label">Muertes</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--green)">${paises}</div><div class="stat-label">Países</div></div>
+    `);
+    setToolbar(`<button class="tb-btn" onclick="loadHanta()">🔄 Actualizar</button><span style="color:var(--muted);font-size:.75rem">D1 Database · ${total} registros</span>`);
+    setLegend(`
+      <div class="legend-item"><div class="legend-dot" style="background:#e63946"></div>100+ casos</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f4a261"></div>10-99 casos</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#52b788"></div>1-9 casos</div>
+    `);
+    cases.forEach(c=>{
+      if(!c.lat||!c.lon)return;
+      const color=c.cases_total>=100?'#e63946':c.cases_total>=10?'#f4a261':'#52b788';
+      const r=Math.max(5,Math.min(20,Math.log(c.cases_total+1)*3));
+      const circle=L.circleMarker([c.lat,c.lon],{radius:r,fillColor:color,color:'#000',weight:.5,fillOpacity:.75}).addTo(map);
+      circle.bindPopup(`<b>${c.country}</b><br>📍 ${c.region}<br>🦠 Casos: <b>${c.cases_total}</b><br>💀 Muertes: <b>${c.deaths||0}</b><br>📅 ${c.reported_date}<br>${c.notes?'📝 '+c.notes:''}`);
+      markers.push(circle);
+    });
+    const html=cases.map(c=>`
+      <div class="item-row" onclick="${c.lat&&c.lon?'flyTo('+c.lat+','+c.lon+')':''}">
+        <div class="title">${c.country} <span style="color:var(--muted);font-weight:400">— ${c.region||''}</span></div>
+        <div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap">
+          <span class="badge badge-red">🦠 ${c.cases_total} casos</span>
+          ${c.deaths?'<span class="badge badge-purple">💀 '+c.deaths+' muertes</span>':''}
+          <span class="badge" style="color:var(--muted);background:var(--bg2)">${c.reported_date||''}</span>
+        </div>
+        ${c.notes?'<div class="sub" style="margin-top:3px">'+c.notes+'</div>':''}
+      </div>`).join('');
+    setList(html||'<div class="loading">Sin datos en la base</div>');
+  } catch(e){setList(`<div class="loading">Error: ${e.message}</div>`);}
+}
+
+// ── SISMOS ─────────────────────────────────────────────
+async function loadSismos(region) {
+  try {
+    const minmag=document.getElementById('sismo-mag')?.value||4.0;
+    const dias=document.getElementById('sismo-dias')?.value||1;
+    region=region||window._sismoRegion||'global';
+    window._sismoRegion=region;
+    const params=new URLSearchParams({limit:200,minmag,days:dias});
+    if(region==='mexico'){params.set('minlat',14);params.set('maxlat',33);params.set('minlon',-118);params.set('maxlon',-86);}
+    else if(region==='anillo'){params.set('minlat',-60);params.set('maxlat',60);params.set('minlon',100);params.set('maxlon',-60);}
+    else if(region==='europa'){params.set('minlat',35);params.set('maxlat',70);params.set('minlon',-25);params.set('maxlon',45);}
+    else if(region==='japon'){params.set('minlat',30);params.set('maxlat',46);params.set('minlon',129);params.set('maxlon',146);}
+    const res=await fetch(`/api/sismos?${params}`);
+    const {features}=await res.json();
+    const ahora=Date.now();
+    const recientes=features.filter(f=>(ahora-f.time)<7200000);
+    const maxMag=features.reduce((m,f)=>Math.max(m,f.mag),0);
+    const avg=features.length?(features.reduce((s,f)=>s+f.mag,0)/features.length).toFixed(1):0;
+    setStat(`
+      <div class="stat"><div class="stat-val" style="color:var(--accent2)">${features.length}</div><div class="stat-label">Sismos</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--accent)">${maxMag.toFixed(1)}</div><div class="stat-label">Mag Máx</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--green)">${avg}</div><div class="stat-label">Promedio</div></div>
+      <div class="stat"><div class="stat-val" style="color:#f72585">${recientes.length}</div><div class="stat-label">Últimas 2h</div></div>
+    `);
+    const regionBtns=['global','mexico','anillo','europa','japon'].map(r=>{
+      const labels={global:'🌍 Global',mexico:'🇲🇽 México',anillo:'🔥 Anillo',europa:'🇪🇺 Europa',japon:'🇯🇵 Japón'};
+      const active=r===region?'background:var(--accent2);color:#000;':'';
+      return `<button class="tb-btn" style="${active}" onclick="loadSismos('${r}')">${labels[r]}</button>`;
+    }).join('');
+    setToolbar(`
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;width:100%">
+        ${regionBtns}
+        <label style="color:var(--muted);font-size:.8rem;margin-left:4px">M≥<span id="mag-val">${minmag}</span></label>
+        <input type="range" id="sismo-mag" min="2" max="8" step="0.5" value="${minmag}" oninput="document.getElementById('mag-val').textContent=this.value;loadSismos(window._sismoRegion)" style="width:80px"/>
+        <select id="sismo-dias" onchange="loadSismos(window._sismoRegion)" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:4px;border-radius:4px;font-size:.8rem">
+          <option value="1" ${dias==1?'selected':''}>24h</option>
+          <option value="3" ${dias==3?'selected':''}>3 días</option>
+          <option value="7" ${dias==7?'selected':''}>7 días</option>
+        </select>
+        <button class="tb-btn" onclick="loadSismos(window._sismoRegion)">🔄</button>
+      </div>
+    `);
+    setLegend(`
+      <div class="legend-item"><div class="legend-dot" style="background:#ff0000"></div>M7+</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ff6600"></div>M6+</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffaa00"></div>M5+</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffff00"></div>M4+</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f72585"></div>Últimas 2h</div>
+    `);
+    setSidebarTitle(`SISMOS — ${dias==1?'últimas 24h':dias+' días'}`);
+    clearMarkers();
+    features.forEach(f=>{
+      const esR=(ahora-f.time)<7200000;
+      const color=esR?'#f72585':f.mag>=7?'#ff0000':f.mag>=6?'#ff6600':f.mag>=5?'#ffaa00':'#ffff00';
+      const c=L.circleMarker([f.lat,f.lon],{radius:Math.max(4,f.mag*2.5),fillColor:color,color:esR?'#fff':'#000',weight:esR?1.5:.5,opacity:.9,fillOpacity:.75}).addTo(map);
+      c.bindPopup(`<b>M${f.mag}</b>${esR?' <span style="background:#f72585;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px">RECIENTE</span>':''}<br>${f.place}<br>Prof: ${f.depth}km<br>${new Date(f.time).toLocaleString()}`);
+      markers.push(c);
+    });
+    let html='';
+    if(recientes.length){
+      html+=`<div style="padding:6px 12px;font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:#f72585">🔴 Últimas 2 horas (${recientes.length})</div>`;
+      recientes.forEach(f=>{html+=`<div class="item-row" onclick="flyTo(${f.lat},${f.lon})" style="border-left:3px solid #f72585"><div class="title">M${f.mag} — ${(f.place||'').substring(0,40)} <span style="background:#f72585;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px">RECIENTE</span></div><div class="sub">${new Date(f.time).toLocaleString()} · Prof: ${f.depth}km</div></div>`;});
+    }
+    html+=`<div style="padding:6px 12px;font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted)">Todos (${features.length})</div>`;
+    features.forEach(f=>{
+      const esR=(ahora-f.time)<7200000;
+      const color=f.mag>=7?'#ff0000':f.mag>=6?'#ff6600':f.mag>=5?'#ffaa00':'#ffff00';
+      html+=`<div class="item-row" onclick="flyTo(${f.lat},${f.lon})"><div class="title" style="color:${color}">M${f.mag} — ${(f.place||'').substring(0,38)}${esR?' 🔴':''}</div><div class="sub">${new Date(f.time).toLocaleString()} · Prof: ${f.depth}km</div></div>`;
+    });
+    html+='<div style="height:40px"></div>';
+    setList(html);
+    if(refreshTimer)clearInterval(refreshTimer);
+    refreshTimer=setInterval(()=>loadSismos(window._sismoRegion),120000);
+  } catch(e){setList(`<div class="loading">Error: ${e.message}</div>`);}
+}
+</script>
+<script>
+// ── VUELOS ─────────────────────────────────────────────
+async function loadVuelos(lat, lon, dist) {
+  try {
+    const center=map.getCenter();
+    lat=lat||center.lat.toFixed(2);
+    lon=lon||center.lng.toFixed(2);
+    dist=dist||800;
+    markers.forEach(m=>map.removeLayer(m));markers=[];
+    setSidebarTitle('✈️ Vuelos en Tiempo Real');
+    setToolbar(`
+      <button class="tb-btn" onclick="loadVuelos()">🔄 Zona actual</button>
+      <button class="tb-btn" onclick="loadVuelos(23.63,-102.55,800)">🇲🇽 México</button>
+      <button class="tb-btn" onclick="loadVuelos(48.85,2.35,1000)">🇪🇺 Europa</button>
+      <button class="tb-btn" onclick="loadVuelos(40.71,-74.01,800)">🇺🇸 EEUU</button>
+      <button class="tb-btn" onclick="loadVuelos(35.69,139.69,800)">🇯🇵 Asia</button>
+      <button class="tb-btn" onclick="loadVuelos(-14.23,-51.92,1200)">🇧🇷 S.América</button>
+      <span style="color:var(--muted);font-size:.75rem">· Auto 30s</span>
+    `);
+    setList('<div class="loading">⏳ Cargando vuelos...</div>');
+    const res=await fetch('/api/vuelos?lat='+lat+'&lon='+lon+'&dist='+dist);
+    const data=await res.json();
+    const flights=data.flights||[];
+    const porPais={};
+    flights.forEach(f=>{porPais[f.country]=(porPais[f.country]||0)+1;});
+    const rankingPais=Object.entries(porPais).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    setStat(`
+      <div class="stat"><div class="stat-val" style="color:var(--blue)">${flights.length}</div><div class="stat-label">Vuelos</div></div>
+      <div class="stat"><div class="stat-val">${flights.filter(f=>!f.on_ground).length}</div><div class="stat-label">En aire</div></div>
+      <div class="stat"><div class="stat-val">${flights.filter(f=>f.on_ground).length}</div><div class="stat-label">En tierra</div></div>
+      <div class="stat"><div class="stat-val" style="font-size:.7rem;color:var(--muted)">${dist}km</div><div class="stat-label">Radio</div></div>
+    `);
+    flights.forEach(f=>{
+      const color=f.on_ground?'#888':'var(--blue)';
+      const icon=L.divIcon({html:`<div style="color:${color};font-size:16px;transform:rotate(${f.heading}deg);line-height:1">✈</div>`,className:'',iconSize:[20,20]});
+      const mk=L.marker([f.lat,f.lon],{icon}).addTo(map);
+      const faUrl=f.callsign&&f.callsign!=='N/A'?`https://flightaware.com/live/flight/${f.callsign.trim()}`:null;
+      mk.bindPopup(`<b style="color:#4af">${f.callsign}</b><br>🌍 ${f.country} · <code>${f.icao}</code><br>${f.on_ground?'🛬 En tierra':'🛫 En vuelo'}<br>📏 Alt: <b>${f.altitude} ft</b><br>💨 <b>${f.velocity} kts</b> · ${f.heading}°<br>${faUrl?`<a href="${faUrl}" target="_blank" style="color:var(--accent);font-size:11px">🔗 Ver en FlightAware</a>`:''}`);
+      markers.push(mk);
+    });
+    const rankingHtml=`<div style="padding:8px 12px;border-bottom:1px solid var(--border)"><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:6px">Top países</div><div style="display:flex;gap:6px;flex-wrap:wrap">${rankingPais.map(([p,n])=>`<span style="background:var(--bg2);border:1px solid var(--border);padding:2px 7px;border-radius:3px;font-size:11px"><b style="color:var(--blue)">${n}</b> ${p||'?'}</span>`).join('')}</div></div>`;
+    const filterInput=`<div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center"><input id="vuelos-filter" placeholder="Filtrar por callsign..." oninput="filtrarVuelos()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:4px;font-size:12px;outline:none;flex:1"/><button onclick="document.getElementById('vuelos-filter').value='';filtrarVuelos()" style="background:var(--bg2);border:1px solid var(--border);color:var(--muted);padding:5px 8px;border-radius:4px;font-size:11px;cursor:pointer">✕</button></div>`;
+    const listaHtml=flights.map(f=>`<div class="vuelo-item item-row" data-callsign="${f.callsign.toLowerCase()}" onclick="map.flyTo([${f.lat},${f.lon}],8)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;color:var(--blue)">${f.callsign}</div><div style="font-size:.75rem;color:var(--muted)">${f.country} · ${f.icao}</div></div><div style="text-align:right;font-size:.75rem"><div>${f.on_ground?'🛬':'🛫'} ${f.on_ground?'Tierra':'Vuelo'}</div><div style="color:var(--muted)">${f.altitude}ft · ${f.velocity}kts</div></div></div></div>`).join('');
+    setList(filterInput+rankingHtml+`<div id="vuelos-lista">${listaHtml||'<div class="loading">Sin vuelos</div>'}</div><div style="height:40px"></div>`);
+    if(refreshTimer)clearInterval(refreshTimer);
+    refreshTimer=setInterval(()=>loadVuelos(lat,lon,dist),30000);
+  } catch(e){setList(`<div class="loading">Error: ${e.message}</div>`);}
+}
+
+function filtrarVuelos(){
+  const q=document.getElementById('vuelos-filter').value.toLowerCase();
+  document.querySelectorAll('.vuelo-item').forEach(el=>{el.style.display=el.dataset.callsign.includes(q)?'':'none';});
+}
+
+// ── INCENDIOS ──────────────────────────────────────────
+async function loadIncendios() {
+  try {
+    clearMarkers();
+    setSidebarTitle('🔥 Incendios Activos');
+    setToolbar(`<button class="tb-btn" onclick="loadIncendios()">🔄 Actualizar</button><span style="color:var(--muted);font-size:.75rem">NASA FIRMS · VIIRS</span>`);
+    setList('<div class="loading">⏳ Consultando NASA FIRMS...</div>');
+    const res=await fetch('/api/incendios');
+    const data=await res.json();
+    const points=data.points||[];
+    setStat(`<div class="stat"><div class="stat-val" style="color:var(--accent2)">${points.length.toLocaleString()}</div><div class="stat-label">Focos</div></div>`);
+    points.slice(0,800).forEach(p=>{
+      const c=L.circleMarker([p.lat,p.lon],{radius:3,fillColor:'#ff6600',color:'#ff0000',weight:0.5,fillOpacity:.7}).addTo(map);
+      markers.push(c);
+    });
+    setList(`<div class="loading">${points.length.toLocaleString()} focos detectados.<br><br>Toca cualquier punto en el mapa para detalles.</div>`);
+  } catch(e){setList(`<div class="loading">Error: ${e.message}</div>`);}
+}
+
+// ── ISS ────────────────────────────────────────────────
+async function loadISS() {
+  try {
+    clearMarkers();
+    setSidebarTitle('🛸 Estación Espacial ISS');
+    setToolbar(`<button class="tb-btn" onclick="loadISS()">🔄 Actualizar</button><span style="color:var(--muted);font-size:.75rem">Auto cada 10s</span>`);
+    const res=await fetch('https://api.wheretheiss.at/v1/satellites/25544');
+    const d=await res.json();
+    setStat(`
+      <div class="stat"><div class="stat-val" style="color:var(--green)">${d.latitude.toFixed(2)}°</div><div class="stat-label">Latitud</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--green)">${d.longitude.toFixed(2)}°</div><div class="stat-label">Longitud</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--accent2)">${Math.round(d.altitude)} km</div><div class="stat-label">Altitud</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--blue)">${Math.round(d.velocity)} km/h</div><div class="stat-label">Velocidad</div></div>
+    `);
+    const icon=L.divIcon({html:'<div style="font-size:24px">🛸</div>',className:'',iconSize:[30,30]});
+    if(issMarker)map.removeLayer(issMarker);
+    issMarker=L.marker([d.latitude,d.longitude],{icon}).addTo(map);
+    issMarker.bindPopup(`<b>ISS</b><br>Alt: ${Math.round(d.altitude)}km<br>Vel: ${Math.round(d.velocity)}km/h`).openPopup();
+    map.flyTo([d.latitude,d.longitude],3,{duration:1.5});
+    setList(`<div style="padding:16px"><div style="font-size:.85rem;color:var(--text2);line-height:1.8">
+      <div>🌐 Lat: <b>${d.latitude.toFixed(4)}</b></div>
+      <div>🌐 Lon: <b>${d.longitude.toFixed(4)}</b></div>
+      <div>📏 Altitud: <b>${Math.round(d.altitude)} km</b></div>
+      <div>💨 Velocidad: <b>${Math.round(d.velocity)} km/h</b></div>
+      <div>🌅 Visibilidad: <b>${d.visibility}</b></div>
+    </div></div>`);
+    if(refreshTimer)clearInterval(refreshTimer);
+    refreshTimer=setInterval(loadISS,10000);
+  } catch(e){setList(`<div class="loading">Error: ${e.message}</div>`);}
+}
+</script>
+<script>
+// ── ASTEROIDES ─────────────────────────────────────────
+async function loadAsteroides() {
+  try {
+    markers.forEach(m=>map.removeLayer(m));markers=[];
+    setSidebarTitle('☄️ Asteroides');
+    setToolbar(`<button class="tb-btn" onclick="loadAsteroides()">🔄 Actualizar</button><span style="color:var(--muted);font-size:.75rem">NASA NeoWs · datos de hoy</span>`);
+    setList('<div class="loading">⏳ Consultando NASA...</div>');
+    const res=await fetch('/api/asteroides');
+    const {asteroids,total}=await res.json();
+    const hazardous=asteroids.filter(a=>a.hazardous);
+    const safe=asteroids.filter(a=>!a.hazardous);
+    const closest=asteroids[0];
+    setStat(`
+      <div class="stat"><div class="stat-val" style="color:#c77dff">${total}</div><div class="stat-label">NEOs hoy</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--accent)">${hazardous.length}</div><div class="stat-label">⚠️ Peligrosos</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--green)">${safe.length}</div><div class="stat-label">Sin riesgo</div></div>
+      <div class="stat"><div class="stat-val" style="color:var(--accent2);font-size:.9rem">${closest?(closest.miss_distance_km/1000000).toFixed(2)+'M km':'—'}</div><div class="stat-label">Más cercano</div></div>
+    `);
+    setLegend('');
+    map.setView([20,-30],2);
+    const asteroidCard=(a)=>{
+      const distM=(a.miss_distance_km/1000000).toFixed(2);
+      const distLuna=(a.miss_distance_km/384400).toFixed(1);
+      const velK=(a.velocity_kmh/1000).toFixed(0);
+      const diam=a.diameter_km<1?(a.diameter_km*1000).toFixed(0)+'m':a.diameter_km.toFixed(2)+'km';
+      const danger=a.hazardous;
+      const color=danger?'var(--accent)':'#c77dff';
+      const badge=danger
+        ?'<span style="background:rgba(230,57,70,.15);color:var(--accent);padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700">⚠️ PELIGROSO</span>'
+        :'<span style="background:rgba(123,45,139,.15);color:#c77dff;padding:2px 7px;border-radius:3px;font-size:10px">✅ Sin riesgo</span>';
+      return `<div style="margin:8px 12px;padding:12px;background:var(--bg2);border:1px solid ${danger?'var(--accent)':'var(--border)'};border-radius:8px;${danger?'box-shadow:0 0 8px rgba(230,57,70,.2)':''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div style="font-weight:700;font-size:.85rem;color:${color};flex:1;padding-right:8px">${a.name}</div>${badge}
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="background:var(--bg);padding:7px;border-radius:5px">
+            <div style="font-size:10px;color:var(--muted)">DISTANCIA</div>
+            <div style="font-weight:700;font-size:.85rem">${distM}M km</div>
+            <div style="font-size:10px;color:var(--muted)">${distLuna}x dist. lunar</div>
+          </div>
+          <div style="background:var(--bg);padding:7px;border-radius:5px">
+            <div style="font-size:10px;color:var(--muted)">VELOCIDAD</div>
+            <div style="font-weight:700;font-size:.85rem">${velK}k km/h</div>
+            <div style="font-size:10px;color:var(--muted)">${(a.velocity_kmh/1080).toFixed(0)}x vel. sonido</div>
+          </div>
+          <div style="background:var(--bg);padding:7px;border-radius:5px">
+            <div style="font-size:10px;color:var(--muted)">TAMAÑO</div>
+            <div style="font-weight:700;font-size:.85rem">${diam}</div>
+            <div style="font-size:10px;color:var(--muted)">${a.diameter_km<0.1?'Tamaño edificio':a.diameter_km<0.5?'Tamaño ciudad':a.diameter_km<2?'Destrucción regional':'Extinción masiva'}</div>
+          </div>
+          <div style="background:var(--bg);padding:7px;border-radius:5px">
+            <div style="font-size:10px;color:var(--muted)">FUENTE</div>
+            <div style="font-weight:700;font-size:.85rem">NASA</div>
+            <div style="font-size:10px;color:var(--muted)">NeoWs API</div>
+          </div>
+        </div>
+      </div>`;
+    };
+    let html='';
+    if(hazardous.length){
+      html+=`<div style="padding:8px 12px 4px;font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:var(--accent)">⚠️ Potencialmente peligrosos (${hazardous.length})</div>`;
+      html+=hazardous.map(asteroidCard).join('');
+    }
+    html+=`<div style="padding:8px 12px 4px;font-size:.65rem;text-transform:uppercase;letter-spacing:2px;color:#c77dff">☄️ Sin riesgo (${safe.length})</div>`;
+    html+=safe.map(asteroidCard).join('');
+    html+='<div style="height:40px"></div>';
+    setList(html);
+  } catch(e){setList(`<div class="loading">Error: ${e.message}</div>`);}
+}
+
+// ── CLIMA ──────────────────────────────────────────────
+async function loadClima() {
+  try {
+    const ciudades=[
+      {nombre:'Ciudad de México',lat:19.43,lon:-99.13},
+      {nombre:'Monterrey',lat:25.67,lon:-100.31},
+      {nombre:'Guadalajara',lat:20.66,lon:-103.35},
+      {nombre:'Nueva York',lat:40.71,lon:-74.01},
+      {nombre:'Madrid',lat:40.42,lon:-3.70},
+      {nombre:'Buenos Aires',lat:-34.60,lon:-58.38},
+      {nombre:'Londres',lat:51.51,lon:-0.13},
+      {nombre:'Tokio',lat:35.69,lon:139.69},
+      {nombre:'São Paulo',lat:-23.55,lon:-46.63},
+      {nombre:'París',lat:48.85,lon:2.35},
+    ];
+    const input=`<div style="padding:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input id="clima-ciudad" placeholder="Ciudad..." style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:4px;font-size:13px;outline:none;flex:1;min-width:140px"/>
+      <input id="clima-lat" placeholder="Lat" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;font-size:13px;outline:none;width:70px"/>
+      <input id="clima-lon" placeholder="Lon" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:4px;font-size:13px;outline:none;width:70px"/>
+      <button onclick="buscarClima()" style="background:var(--accent);border:none;color:#fff;padding:8px 16px;border-radius:4px;cursor:pointer;font-weight:700">🔍 Buscar</button>
+    </div>
+    <div style="padding:0 10px 10px;display:flex;gap:6px;flex-wrap:wrap">${ciudades.map(c=>`<button onclick="climaRapido(${c.lat},${c.lon},'${c.nombre}')" style="background:var(--bg2);border:1px solid var(--border);color:var(--text2);padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px">${c.nombre}</button>`).join('')}</div>
+    <div id="clima-result" style="padding:10px;padding-bottom:120px"></div>`;
+    markers.forEach(m=>map.removeLayer(m));markers=[];
+    setList(input);
+    setSidebarTitle('🌤️ Clima');
+    setStat('<div class="stat"><div class="stat-val">—</div><div class="stat-label">Temp</div></div><div class="stat"><div class="stat-val">—</div><div class="stat-label">Humedad</div></div><div class="stat"><div class="stat-val">—</div><div class="stat-label">Viento</div></div><div class="stat"><div class="stat-val">—</div><div class="stat-label">Ciudad</div></div>');
+  } catch(e){console.error(e);}
+}
+
+async function climaRapido(lat,lon,nombre) {
+  document.getElementById('clima-result').innerHTML='<div style="color:var(--text2);padding:20px;text-align:center">⏳ Cargando '+nombre+'...</div>';
+  try {
+    const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,weather_code,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=auto&forecast_days=7');
+    const d=await r.json();
+    const c=d.current;
+    const daily=d.daily;
+    const wicon=weatherIcon(c.weather_code);
+    const dias=daily.time.map((t,i)=>`
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 2px;text-align:center;">
+        <div style="font-size:11px;color:var(--text2)">${new Date(t).toLocaleDateString('es',{weekday:'short'}).toUpperCase()}</div>
+        <div style="font-size:20px;margin:4px 0">${weatherIcon(daily.weather_code[i])}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--accent)">${Math.round(daily.temperature_2m_max[i])}°</div>
+        <div style="font-size:11px;color:var(--text2)">${Math.round(daily.temperature_2m_min[i])}°</div>
+        <div style="font-size:10px;color:#4af">${daily.precipitation_sum[i]}mm</div>
+      </div>`).join('');
+    document.getElementById('clima-result').innerHTML=`
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px">
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px">📍 ${nombre}</div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="font-size:48px">${wicon}</div>
+          <div>
+            <div style="font-size:36px;font-weight:700;color:var(--accent)">${Math.round(c.temperature_2m)}°C</div>
+            <div style="font-size:13px;color:var(--text2)">Sensación ${Math.round(c.apparent_temperature)}°C</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="font-size:12px">💧 Humedad: <b>${c.relative_humidity_2m}%</b></div>
+            <div style="font-size:12px">💨 Viento: <b>${c.wind_speed_10m} km/h</b></div>
+            <div style="font-size:12px">🌧 Precip: <b>${c.precipitation} mm</b></div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;padding:0 2px">PRONÓSTICO 7 DÍAS</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding-bottom:6px">${dias}</div>`;
+    setStat('<div class="stat"><div class="stat-val" style="color:var(--accent)">'+Math.round(c.temperature_2m)+'°C</div><div class="stat-label">Temp</div></div><div class="stat"><div class="stat-val">'+c.relative_humidity_2m+'%</div><div class="stat-label">Humedad</div></div><div class="stat"><div class="stat-val">'+c.wind_speed_10m+' km/h</div><div class="stat-label">Viento</div></div><div class="stat"><div class="stat-val">'+wicon+'</div><div class="stat-label">'+nombre+'</div></div>');
+    map.flyTo([lat,lon],6,{duration:1.5});
+    const mk=L.marker([lat,lon]).addTo(map).bindPopup('<b>'+nombre+'</b><br>'+Math.round(c.temperature_2m)+'°C '+wicon).openPopup();
+    markers.push(mk);
+  } catch(e){document.getElementById('clima-result').innerHTML='<div style="color:var(--accent);padding:20px">Error: '+e.message+'</div>';}
+}
+
+async function buscarClima() {
+  const ciudad=document.getElementById('clima-ciudad').value.trim();
+  const latI=parseFloat(document.getElementById('clima-lat').value);
+  const lonI=parseFloat(document.getElementById('clima-lon').value);
+  if(!isNaN(latI)&&!isNaN(lonI)){climaRapido(latI,lonI,ciudad||'Ubicación');return;}
+  if(!ciudad)return;
+  try {
+    const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(ciudad)+'&count=1&language=es');
+    const gd=await g.json();
+    if(!gd.results?.length){document.getElementById('clima-result').innerHTML='<div style="color:var(--accent);padding:20px">Ciudad no encontrada</div>';return;}
+    const loc=gd.results[0];
+    climaRapido(loc.latitude,loc.longitude,loc.name+', '+loc.country);
+  } catch(e){document.getElementById('clima-result').innerHTML='<div style="color:var(--accent);padding:20px">Error: '+e.message+'</div>';}
+}
+
+function weatherIcon(code) {
+  if(code===0)return '☀️';
+  if(code<=2)return '⛅';
+  if(code<=3)return '☁️';
+  if(code<=49)return '🌫️';
+  if(code<=59)return '🌦️';
+  if(code<=69)return '🌧️';
+  if(code<=79)return '🌨️';
+  if(code<=82)return '⛈️';
+  if(code<=86)return '❄️';
+  if(code<=99)return '⛈️';
+  return '🌡️';
+}
+
+// ── INIT ───────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', ()=>{
+  initMap();
+  setModule('hanta');
+});
+</script>
+</body>
+</html>
