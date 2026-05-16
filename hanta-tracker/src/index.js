@@ -19,8 +19,56 @@ export default {
     // ── HANTA ──────────────────────────────────────────
     if (path === '/api/hanta' || path === '/api/hanta/cases') {
       try {
+        const country = url.searchParams.get('country') || '';
+        const from = url.searchParams.get('from') || '';
+        const to = url.searchParams.get('to') || '';
+        let query = 'SELECT * FROM cases WHERE 1=1';
+        const params = [];
+        if (country) { query += ' AND country = ?'; params.push(country); }
+        if (from) { query += ' AND reported_date >= ?'; params.push(from); }
+        if (to) { query += ' AND reported_date <= ?'; params.push(to); }
+        query += ' ORDER BY reported_date DESC';
+        const { results } = await env.DB.prepare(query).bind(...params).all();
+        return Response.json({ cases: results, total: results.length, last_updated: new Date().toISOString() }, { headers: CORS });
+      } catch (e) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS });
+      }
+    }
+
+    if (path === '/api/hanta/stats') {
+      try {
+        const { results } = await env.DB.prepare('SELECT SUM(cases_total) as total_cases, SUM(deaths) as total_deaths, COUNT(DISTINCT country) as countries FROM cases').all();
+        return Response.json(results[0] || {total_cases:0,total_deaths:0,countries:0}, { headers: CORS });
+      } catch (e) {
+        return Response.json({ error: e.message }, { status: 500, headers: CORS });
+      }
+    }
+
+    if (path === '/api/hanta/countries') {
+      try {
+        const { results } = await env.DB.prepare('SELECT DISTINCT country FROM cases ORDER BY country').all();
+        return Response.json(results.map(r => r.country), { headers: CORS });
+      } catch (e) {
+        return Response.json([], { headers: CORS });
+      }
+    }
+
+    if (path === '/api/hanta/export.csv') {
+      try {
         const { results } = await env.DB.prepare('SELECT * FROM cases ORDER BY reported_date DESC').all();
-        return Response.json({ cases: results, total: results.length }, { headers: CORS });
+        const headers = ['id','country','region','lat','lon','cases_total','deaths','reported_date','notes'];
+        const csv = [headers.join(','), ...results.map(r => headers.map(h => JSON.stringify(r[h]||'')).join(','))].join('\n');
+        return new Response(csv, { headers: {...CORS, 'Content-Type':'text/csv', 'Content-Disposition':'attachment;filename=hanta.csv'} });
+      } catch (e) {
+        return new Response('error', { status: 500 });
+      }
+    }
+
+    if (path === '/api/hanta/sync' && request.method === 'POST') {
+      try {
+        const token = request.headers.get('X-Auth-Token') || '';
+        if (token !== 'hanta2026') return Response.json({ error: 'No autorizado' }, { status: 401, headers: CORS });
+        return Response.json({ inserted: 0, total: 0, message: 'Sync manual no configurado' }, { headers: CORS });
       } catch (e) {
         return Response.json({ error: e.message }, { status: 500, headers: CORS });
       }
