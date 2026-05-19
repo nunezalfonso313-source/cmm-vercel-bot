@@ -604,11 +604,13 @@ async function buscarClima() {
   if(!isNaN(latI)&&!isNaN(lonI)){climaRapido(latI,lonI,ciudad||'Ubicación');return;}
   if(!ciudad)return;
   try {
-    const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(ciudad)+'&count=10&language=es');
+    const g=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(ciudad)+'&format=json&limit=1&addressdetails=1',{headers:{'Accept-Language':'es','User-Agent':'GlobalWatch/1.0'}});
     const gd=await g.json();
-    if(!gd.results?.length){document.getElementById('clima-result').innerHTML='<div style="color:var(--accent);padding:20px">Ciudad no encontrada</div>';return;}
-    const loc=gd.results.sort((a,b)=>(b.population||0)-(a.population||0))[0];
-    climaRapido(loc.latitude,loc.longitude,loc.name+', '+(loc.admin1||'')+', '+loc.country);
+    if(!gd.length){document.getElementById('clima-result').innerHTML='<div style="color:var(--accent);padding:20px">Ciudad no encontrada</div>';return;}
+    const loc=gd[0];
+    const nombre=loc.address?.city||loc.address?.town||loc.address?.village||loc.display_name.split(',')[0];
+    const pais=loc.address?.country||'';
+    climaRapido(parseFloat(loc.lat),parseFloat(loc.lon),nombre+', '+pais);
   } catch(e){document.getElementById('clima-result').innerHTML='<div style="color:var(--accent);padding:20px">Error: '+e.message+'</div>';}
 }
 
