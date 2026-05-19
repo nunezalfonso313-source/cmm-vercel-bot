@@ -604,11 +604,11 @@ async function buscarClima() {
   if(!isNaN(latI)&&!isNaN(lonI)){climaRapido(latI,lonI,ciudad||'Ubicación');return;}
   if(!ciudad)return;
   try {
-    const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(ciudad)+'&count=1&language=es');
+    const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(ciudad)+'&count=10&language=es');
     const gd=await g.json();
     if(!gd.results?.length){document.getElementById('clima-result').innerHTML='<div style="color:var(--accent);padding:20px">Ciudad no encontrada</div>';return;}
-    const loc=gd.results[0];
-    climaRapido(loc.latitude,loc.longitude,loc.name+', '+loc.country);
+    const loc=gd.results.sort((a,b)=>(b.population||0)-(a.population||0))[0];
+    climaRapido(loc.latitude,loc.longitude,loc.name+', '+(loc.admin1||'')+', '+loc.country);
   } catch(e){document.getElementById('clima-result').innerHTML='<div style="color:var(--accent);padding:20px">Error: '+e.message+'</div>';}
 }
 
